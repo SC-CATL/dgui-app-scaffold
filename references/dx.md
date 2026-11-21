@@ -101,9 +101,19 @@ uv run test:watch                # 规划：文件变化自动跑相关测试
 | 全新 `uv sync` | < 2min |
 | 生成 feature 并跑通测试 | < 30s |
 
-指标纳入质量基线，回归超过 5% 失败。
+指标纳入质量基线，回归超过 5% 失败。全新 `uv sync` 超过 2 分钟时，先按 `mirrors.md` 判定是否为下载源问题，再决定是否优化依赖。
 
-## 8. 排障顺序
+## 8. 下载加速与镜像
+
+开工前与开发中共用 `mirrors.md` 的判定口径：
+
+- 单文件低于 200 KB/s 持续 10 秒、15 秒无进度，或全新 `uv sync` 超过 2 分钟：判定为慢，立即切换。
+- 会话级设 `UV_DEFAULT_INDEX`；需要团队一致时写进 `pyproject.toml` 的 `[[tool.uv.index]]`（`default = true`）。
+- 解释器、uv 本体、Copier 模板分别用 `UV_PYTHON_INSTALL_MIRROR`、`UV_ASTRAL_MIRROR_URL` 与"预克隆到本地再渲染"。
+- 切换后用 `uv sync --locked` 重试，版本与哈希不变；禁止 `--trusted-host` 与关闭校验。
+- 切换原因、镜像与耗时写入生成记录；公共 GitHub 代理使用前必须探测。
+
+## 9. 排障顺序
 
 1. `uv run doctor` 看环境。
 2. `uv run app --mock` 排除数据库影响。

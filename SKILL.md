@@ -24,7 +24,7 @@ description: 生成、审查或扩展 DGUIApp（PySide6）桌面应用脚手架�
 
 ## 生成流程
 
-前置：Windows 10/11、`uv` 已安装、目标目录为空或仅含 `.git`。
+前置：Windows 10/11、`uv` 已安装、目标目录为空或仅含 `.git`。**开工前先探测下载源**：判定慢就立即切镜像，不要带着慢源开始渲染或同步。
 
 ```powershell
 copier copy --trust <模板仓库> myapp
@@ -47,6 +47,25 @@ python scripts/scaffold.py C:\path\myapp
 3. 调用 `copier.run_copy` 渲染。
 4. `git init` 并做首次提交（可用 `--no-git` 跳过）。
 5. 写生成记录；`.venv` 存在时跑 `--self-test` 冒烟，失败删除半成品。
+
+## 下载与镜像（工程前 + 开发中）
+
+任何联网下载（解释器、依赖、模板、工具、wheel）都按同一口径判定；**一旦慢，立即切换镜像，不反复重试原源**。
+
+| 判定 | 阈值 |
+|---|---|
+| 吞吐不足 | 低于 200 KB/s 且持续 10 秒 |
+| 无进度 | 15 秒内字节数不增长 |
+| 单任务超时 | 超过 60 秒且预计剩余超过 5 分钟 |
+| 连接失败 | 连续 2 次超时、重置或 5xx |
+| 基线回归 | 全新 `uv sync` 超过 2 分钟 |
+
+- 工程开始前：5 秒超时探测 PyPI / GitHub / 解释器源；首字节超过 2 秒或不可达即视为慢，先为本次会话设镜像。
+- 开发中：发现慢立即暂停当前下载，探测候选源，选最快者重试，并记录原源、镜像与耗时。
+- 配置优先级：单次命令 > 会话环境 > 项目配置 > 用户全局；写全局必须先告知并给出回滚。
+- 有锁文件时只用 `uv sync --locked`；切镜像不得升级版本、不得关闭哈希校验。
+- 只用 HTTPS 可信镜像；私有包与凭证只走官方或私有源，绝不经第三方代理。
+- 细节、探测命令与各资源切换方式见 `references/mirrors.md`。
 
 ## 锁定参数
 
@@ -131,6 +150,7 @@ python scripts/scaffold.py C:\path\myapp
 | `references/dx.md` | 做一键启动、热重载、生成器、开发面板 |
 | `references/template-spec.md` | 改 `copier.yml`、加 profile、按阶段实施 |
 | `references/qt-binding.md` | 处理 PySide6 / PySide2 兼容、降级、打包差异 |
+| `references/mirrors.md` | 下载慢、依赖装不上、模板拉不下来、解释器或工具下载卡住 |
 
 ## 任务路由
 
@@ -147,6 +167,8 @@ python scripts/scaffold.py C:\path\myapp
 | 模板升级 | 读 `template-spec.md` 的参数表与渲染矩阵；`_migrations` 升级脚本规划中 |
 | 兼容老环境 | 读 `qt-binding.md`，绑定只在 `platform/ui/qt.py`，构建时自动降级 |
 | 要打包分发 | 先确认用户明确要求；才生成 `pyinstaller.spec`、`scripts/build.py` 与打包 CI |
+| 下载慢 / 依赖装不上 / 模板拉不下来 | 按 `mirrors.md` 判定慢速并立即切镜像；记录切换前后的实测 |
+| 换机器 / 内网部署 | 用 `mirrors.md` 的离线缓存与私有源方案，不依赖个人会话配置 |
 
 ## 生成后验收
 
@@ -161,6 +183,7 @@ python scripts/scaffold.py C:\path\myapp
 - [ ] PySide6 与 PySide2 两个绑定各出一次可启动产物（仅启用打包时要求）。
 - [ ] 明暗主题切换无残留样式。
 - [ ] 关闭窗口后进程与单实例锁正常释放。
+- [ ] 下载全程无长时间卡住；切过镜像时，生成记录已写明原源、镜像与耗时。
 
 ## 常见错误
 
@@ -180,10 +203,16 @@ python scripts/scaffold.py C:\path\myapp
 | 设置项重启后丢失 | 存了 `QSettings` 或内存 | 入 `app_settings` 表 |
 | 模型加了字段但库没变 | 没生成迁移 | 手写 Alembic 迁移（`new migration` 生成器规划中），CI 跑 `alembic check` |
 | 启动慢 | 首屏同步导入重模块 | 延迟导入，启动耗时进基线 |
+| `uv sync` 长时间无进度 | 源慢或被限速 | 按 `mirrors.md` 判定并切镜像，不反复重试 |
+| 镜像缺少锁定版本 | 镜像同步滞后 | 该次命令回官方源，保持版本不变 |
+| 配了镜像仍然慢 | 镜像本身慢，或代理与镜像叠加 | 重新探测，只保留一层加速 |
+| 切换镜像后版本被升级 | 误跑了 `uv lock --upgrade` | 回到 `uv.lock`，用 `--locked` 重装 |
+| TLS 证书错误 | 企业证书未被信任 | `UV_SYSTEM_CERTS=1` 或配置企业根证书，不要关闭校验 |
 
 ## 输出要求
 
 - 改代码前先读对应 reference，不要凭记忆套规范。
 - 新增文件必须同时补测试与注册（容器、路由）。
 - 生成器改动后必须跑一次渲染矩阵，五种组合全部通过。
+- 切过下载源必须记录原源、镜像与耗时；不得静默修改用户全局配置。
 - 任何绕过门禁的改动都要在回复里显式说明原因与补救计划。

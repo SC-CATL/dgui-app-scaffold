@@ -2,13 +2,14 @@
 
 一套给 AI 编码代理使用的 **DGUIApp（PySide6）桌面应用工程规范**，以 OpenCode / Claude 兼容的 Skill 形式分发。
 
-技能本身不包含可执行代码，而是把已经定稿的工程约定沉淀成可检索的规则：Copier 模板、横纵分层（`platform/` + `features/`）、ports/adapters、SQLite 可切 MySQL、MVVM + UI Runtime、严格代码规范、质量门禁，以及 DX 一键启动与热重载。
+技能本身不包含可执行代码，而是把已经定稿的工程约定沉淀成可检索的规则：Copier 模板、横纵分层（`platform/` + `features/`）、ports/adapters、SQLite 可切 MySQL、MVVM + UI Runtime、严格代码规范、质量门禁、DX 一键启动与热重载，以及下载慢时的镜像切换策略。
 
 ## 这个技能解决什么
 
 - 从零生成 PySide6 桌面项目时，避免每次重新讨论目录、依赖方向和启动链。
 - 在已有项目里新增业务切片、页面、Alembic 迁移或适配器时，给出固定落点。
 - 审查项目是否违反分层契约、样式令牌、线程模型或质量门槛。
+- 工程开始前与开发中，依赖、解释器、模板或工具下载变慢时，按统一阈值判定并立即切换镜像，留下可复现记录。
 - 维护 Copier 模板本身：参数、profile、渲染矩阵与升级迁移。
 
 不适用于 Web、移动端、服务端项目，也不适用于 Tkinter / wxPython 等非 PySide6 GUI。
@@ -57,7 +58,8 @@ git clone https://github.com/SC-CATL/dgui-app-scaffold.git \
     ├── lifecycle.md             # 生成记录、审查报告、归档
     ├── dx.md                    # 一键启动、热重载、生成器
     ├── template-spec.md         # Copier 参数、渲染矩阵、实施路线
-    └── qt-binding.md            # PySide6 / PySide2 兼容与降级
+    ├── qt-binding.md            # PySide6 / PySide2 兼容与降级
+    └── mirrors.md               # 下载慢速判定、镜像与离线缓存
 ```
 
 ## 核心约定（摘录）
@@ -67,6 +69,7 @@ git clone https://github.com/SC-CATL/dgui-app-scaffold.git \
 - 页面不写颜色与样式，统一走 `resources/tokens.toml`。
 - UI 线程不做 IO，跨线程只经 `platform/ui/kit/tasks.py`。
 - 每种持久化数据都有对应的表；`QSettings` 只存引导信息。
+- 下载源慢时立即切镜像：单文件低于 200 KB/s 持续 10 秒或 15 秒无进度即判定为慢，切换后仍用 `uv sync --locked` 保持版本与哈希。
 
 完整规则见 `SKILL.md` 与对应 reference。
 
