@@ -1,0 +1,36 @@
+---
+name: Bug report
+description: 报告文档错误、失效链接或规则冲突
+title: "[bug] "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: 问题是什么
+      description: 哪个文件、哪一段规则有问题？
+      placeholder: "references/database.md 第 40 行的迁移示例无法执行"
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望结果
+    validations:
+      required: true
+  - type: input
+    id: environment
+    attributes:
+      label: 使用环境
+      placeholder: "OpenCode 版本 / 操作系统 / Python 版本"
+    validations:
+      required: false
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 自查
+      options:
+        - label: 已确认不是自己项目的配置问题
+          required: true
+        - label: 已搜索过现有 Issue
+          required: true

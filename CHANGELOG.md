@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- GitHub Issue / PR 模板，以及 `check` 工作流：校验 frontmatter、必备文件与相对链接。
+
 ## [0.1.0] - 2026-11-21
 
 ### Added

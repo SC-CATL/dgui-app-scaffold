@@ -1,0 +1,66 @@
+name: check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Validate skill structure
+        run: |
+          python - <<'PY'
+          import re
+          import sys
+          from pathlib import Path
+
+          root = Path(".")
+          errors = []
+
+          skill = root / "SKILL.md"
+          if not skill.is_file():
+              errors.append("缺少 SKILL.md")
+          else:
+              text = skill.read_text(encoding="utf-8")
+              if not text.startswith("---"):
+                  errors.append("SKILL.md 缺少 frontmatter")
+              else:
+                  front = text.split("---", 2)[1]
+                  for key in ("name", "description"):
+                      if not re.search(rf"^{key}:\s*\S", front, re.MULTILINE):
+                          errors.append(f"SKILL.md frontmatter 缺少 {key}")
+
+          required = ["README.md", "LICENSE", ".gitignore", "CONTRIBUTING.md"]
+          for name in required:
+              if not (root / name).is_file():
+                  errors.append(f"缺少 {name}")
+
+          refs = sorted((root / "references").glob("*.md"))
+          if not refs:
+              errors.append("references/ 下没有 Markdown 文件")
+
+          link_re = re.compile(r"\[[^\]]*\]\(([^)\s]+)\)")
+          for md in [skill, *root.glob("*.md"), *refs]:
+              if not md.is_file():
+                  continue
+              for target in link_re.findall(md.read_text(encoding="utf-8")):
+                  if target.startswith(("http://", "https://", "mailto:", "#")):
+                      continue
+                  path = (md.parent / target.split("#", 1)[0]).resolve()
+                  if not path.exists():
+                      errors.append(f"{md}: 链接目标不存在 -> {target}")
+
+          if errors:
+              print("\n".join(f"::error::{e}" for e in errors))
+              sys.exit(1)
+          print(f"OK: 1 个入口，{len(refs)} 份 reference，链接全部可达")
+          PY
