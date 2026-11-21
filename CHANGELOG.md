@@ -7,6 +7,7 @@
 ### Added
 
 - GitHub Issue / PR 模板，以及 `check` 工作流：校验 frontmatter、必备文件与相对链接。
+- `THIRD_PARTY_NOTICES.md`（Contributor Covenant 署名）与 `CITATION.cff`。
 
 ## [0.1.0] - 2026-11-21
 
