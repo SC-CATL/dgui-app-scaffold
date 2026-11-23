@@ -4,6 +4,12 @@
 
 ## [Unreleased]
 
+### Added
+
+- 生成项目新增 `.vscode/settings.json`、`launch.json`、`extensions.json`：默认解释器固定为项目 `.venv`，提供运行与 `--self-test` 两个 debugpy 配置。
+- `main.py` 增加解释器兜底：非项目 `.venv` 时自动 `os.execv` 切换，解决系统 Python 直接运行导致的 `ModuleNotFoundError: structlog/PySide6`。
+- `SKILL.md` 红线、验收清单、常见错误与输出要求同步补充解释器与编辑器配置。
+
 ## [0.2.0] - 2026-11-23
 
 ### Added

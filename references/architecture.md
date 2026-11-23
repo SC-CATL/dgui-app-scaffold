@@ -145,7 +145,7 @@ myapp/
 
 | 入口 | 位置 | 职责 |
 |---|---|---|
-| 根目录启动器 | `main.py` | 薄层转发：路径兜底 + 调用 `myapp.__main__:main`，零业务逻辑 |
+| 根目录启动器 | `main.py` | 薄层转发：解释器兜底（非项目 `.venv` 时切换）+ 路径兜底 + 调用 `myapp.__main__:main`，零业务逻辑 |
 | 包入口 | `src/<pkg>/__main__.py` | 解析 CLI（`--self-test` / `--migrate` / `--mock` / `--dev`），调用 `app/` |
 | 组合根 | `src/<pkg>/app/bootstrap.py` | 装配依赖、创建 QApplication、`app.exec()` |
 
@@ -154,31 +154,66 @@ myapp/
 `main.py` 硬性约束：
 
 1. 只允许 import 标准库与 `<pkg>.__main__`，禁止 import `features/*`、`platform/*`、`app/*`。
-2. 未做 `uv sync` 时把 `src/` 插入 `sys.path` 兜底，让 `python main.py` 可直接跑。
-3. 捕获导入失败与启动异常，写结构化日志后返回非零退出码，不抛裸栈。
-4. 参数原样透传，不自行解析。
-5. 不参与打包：PyInstaller 入口固定为 `src/<pkg>/__main__.py`，`main.py` 仅本地与 CI 冒烟使用。
-6. 文件保持在 60 行以内，且必须有 `--help` 可用。
-7. `__main__` 的导入放在函数内，这是路径兜底的必要延迟导入；若开启 PLC0415，加 `# noqa: PLC0415` 并注明原因。
+2. 解释器兜底：当前 `sys.executable` 不是项目 `.venv` 时用 `os.execv` 切换，失败则继续，不阻断启动。
+3. 未做 `uv sync` 时把 `src/` 插入 `sys.path` 兜底，让 `python main.py` 可直接跑。
+4. 捕获导入失败与启动异常，写结构化日志后返回非零退出码，不抛裸栈。
+5. 参数原样透传，不自行解析。
+6. 不参与打包：PyInstaller 入口固定为 `src/<pkg>/__main__.py`，`main.py` 仅本地与 CI 冒烟使用。
+7. 文件保持在 60 行以内，且必须有 `--help` 可用。
+8. `__main__` 的导入放在函数内，这是路径兜底的必要延迟导入；若开启 PLC0415，加 `# noqa: PLC0415` 并注明原因。
+9. `os.execv` 必须带 `# noqa: S606` 并注明原因；`<PKG>_NO_REEXEC` 环境变量用于显式跳过切换。
 
 ```python
-"""根目录启动器：转发到 <pkg>.__main__:main。"""
+"""根目录启动器：优先切换到项目 .venv，再转发到 <pkg>.__main__:main。"""
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent
+NO_REEXEC_ENV = "<PKG>_NO_REEXEC"
+
+
+def _venv_python() -> Path | None:
+    """返回项目虚拟环境解释器，找不到时为 None。"""
+    for relative in (".venv/Scripts/python.exe", ".venv/bin/python"):
+        candidate = ROOT / relative
+        if candidate.is_file():
+            return candidate
+    return None
+
+
+def _ensure_venv() -> None:
+    """系统 Python 启动时自动切换到项目 .venv，避免依赖缺失。"""
+    if os.environ.get(NO_REEXEC_ENV):
+        return
+    target = _venv_python()
+    if target is None:
+        return
+    try:
+        if Path(sys.executable).samefile(target):
+            return
+    except OSError:
+        pass
+    args = [str(target), str(ROOT / "main.py"), *sys.argv[1:]]
+    try:
+        os.execv(str(target), args)  # noqa: S606 - 必须替换为项目解释器
+    except OSError:
+        return
 
 
 def _ensure_src_on_path() -> None:
     """未安装包时把 src/ 加入导入路径。"""
-    src = Path(__file__).resolve().parent / "src"
+    src = ROOT / "src"
     if src.is_dir() and str(src) not in sys.path:
         sys.path.insert(0, str(src))
 
 
 def main() -> int:
     """启动应用并返回退出码。"""
+    _ensure_venv()
     _ensure_src_on_path()
     try:
         from myapp.__main__ import main as app_main

@@ -25,7 +25,7 @@
    - `QMessageBox` 仅限 `platform/ui/kit/dialogs.py`
    - `QThread` / `QRunnable` 仅限 `platform/ui/kit/tasks.py`
    - `app.exec()` 仅限 `app/bootstrap.py`（当前靠 code review 与唯一入口约定）
-   - 根目录 `main.py` 仅允许转发到 `<pkg>.__main__`，禁止 import `features/*`、`platform/*`、`app/*`
+   - 根目录 `main.py` 仅允许转发到 `<pkg>.__main__`，禁止 import `features/*`、`platform/*`、`app/*`；解释器兜底只允许标准库 `os.execv` + `sys.executable` 比较
    - 禁用 `QRegExp`、`QDesktopWidget`、`QFontMetrics.width`、`exec_()`
 10. 元 CI：模板仓库自身渲染 5 组参数（minimal / standard / full / Qt5 降级 / 关闭可选物）-> 生成项目 -> 跑完整检查。
 11. bandit / gitleaks。

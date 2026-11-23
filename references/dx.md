@@ -30,6 +30,30 @@ uv run doctor                  # 环境体检：Python / Qt / DB / 迁移 / 令�
 - `pyproject.toml` 注册 `[project.scripts]`，`app` / `dev` / `doctor` 随项目分发。
 - 当前 `dev` 不接受 `--mock` / `--reset`；需要 mock 时用 `uv run app --mock`。
 
+## 1.1 解释器与编辑器
+
+根 `main.py` 必须做解释器兜底：发现当前 `sys.executable` 不是项目 `.venv`，就
+`os.execv` 切换到 `.venv/Scripts/python.exe`（POSIX 为 `.venv/bin/python`）再转发。
+这样即使用系统 Python 运行 `python main.py`、或在编辑器里点了错误的运行按钮，也不会
+出现 `ModuleNotFoundError: structlog/PySide6`。
+
+```python
+target = ROOT / ".venv" / "Scripts" / "python.exe"
+if target.is_file() and not Path(sys.executable).samefile(target):
+    os.execv(str(target), [str(target), str(ROOT / "main.py"), *sys.argv[1:]])
+```
+
+生成项目同时附带可移植的编辑器配置：
+
+| 文件 | 要求 |
+|---|---|
+| `.vscode/settings.json` | `python.defaultInterpreterPath = "${workspaceFolder}/.venv/Scripts/python.exe"` |
+| `.vscode/launch.json` | `debugpy` 启动 `main.py`，附带一个 `--self-test` 配置 |
+| `.vscode/extensions.json` | 推荐 Python / debugpy / Ruff / mypy |
+
+`.gitignore` 不得忽略这三个文件；路径一律用 `${workspaceFolder}`，禁止写死本机绝对路径。
+环境变量 `NO_REEXEC`（项目名前缀）用于显式跳过切换，便于排查裸解释器问题。
+
 ## 2. 分级热重载
 
 | 级别 | 范围 | 机制 |

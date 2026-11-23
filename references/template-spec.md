@@ -32,7 +32,8 @@ py-scaffold/
 │  └─ detect_qt.py            # 32 位 / Win7-8 / abi3 wheel -> 绑定
 ├─ tests/test_render.py       # 渲染矩阵 + 残留占位符 + 语法编译
 └─ template/                  # 仅此目录进入生成结果
-   ├─ main.py                 # 薄层启动器（根目录）
+   ├─ main.py                 # 薄层启动器：解释器兜底 + src/ 兜底 + 转发
+   ├─ .vscode/                # settings / launch / extensions（解释器固定 .venv）
    ├─ pyproject.toml          # 依赖、依赖组、ruff/mypy/coverage/importlinter
    ├─ alembic/                # env.py + script.py.mako + versions/0001_initial.py
    ├─ scripts/                # post_gen.py / dev.py / new_feature.py（可选 build.py）
@@ -137,7 +138,8 @@ _tasks:
 
 每个渲染结果还统一断言：
 
-- 文件树完整：`main.py`、`app/bootstrap.py`、`features/settings/api.py`、`alembic/versions/0001_initial.py`、`resources/tokens.toml`。
+- 文件树完整：`main.py`、`.vscode/settings.json`、`.vscode/launch.json`、`app/bootstrap.py`、`features/settings/api.py`、`alembic/versions/0001_initial.py`、`resources/tokens.toml`。
+- `main.py` 含解释器兜底：出现 `os.execv`，且环境变量按包名渲染为 `<PKG>_NO_REEXEC`。
 - 无残留 Jinja（扫描时跳过 `.venv` / `.git` / `reports` / 缓存目录）。
 - 全部 `.py` 通过 `py_compile`。
 
@@ -159,6 +161,7 @@ ruff check . -> mypy src -> pytest -q --cov -> uv run lint-imports -> uv run doc
 每个组合还统一断言 `main.py` 存在；根目录启动器的行为靠生成后的真实冒烟与 `tests/architecture/test_layers.py` 约束：
 
 - 只 import 标准库与 `<pkg>.__main__`（AST 扫描）。
+- 解释器兜底：当前 `sys.executable` 不是项目 `.venv` 时 `os.execv` 切换，避免 `ModuleNotFoundError`；`<PKG>_NO_REEXEC` 可跳过。
 - 未 `uv sync` 时把 `src/` 插入 `sys.path` 兜底。
 - 打包入口固定 `src/<pkg>/__main__.py`，不使用 `main.py`。
 
@@ -172,7 +175,8 @@ ruff check . -> mypy src -> pytest -q --cov -> uv run lint-imports -> uv run doc
 - [x] README / CONTRIBUTING / CHANGELOG
 - [x] Python 版本自动探测与一致性测试
 - [x] Qt 绑定自动探测与锁定（`qt_binding`，PySide6 主选 / PySide2 降级）
-- [x] 根目录 `main.py` 启动器（薄层转发 + `src/` 兜底 + 友好退出）
+- [x] 根目录 `main.py` 启动器（解释器兜底 + 薄层转发 + `src/` 兜底 + 友好退出）
+- [x] `.vscode` 三件套（默认解释器固定 `.venv`，附 `--self-test` 调试配置）
 - [x] `scripts/scaffold.py` 生成入口与生成记录（`reports/generation/`）
 - [x] 文档站骨架（mkdocs + mike 依赖）
 - [x] `uv run dev` / `doctor` 零配置启动

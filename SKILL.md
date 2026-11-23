@@ -83,7 +83,7 @@ python scripts/scaffold.py C:\path\myapp
 
 `python_version` 一旦锁定，`requires-python`、`.python-version`、ruff `target-version`、mypy `python_version`、CI 矩阵全部由它派生；启用打包时 PyInstaller 解释器也用它。禁止各处手写版本号。
 
-## 当前实现状态（2026-11-17）
+## 当前实现状态（2026-11-23）
 
 | 项 | 状态 |
 |---|---|
@@ -93,6 +93,7 @@ python scripts/scaffold.py C:\path\myapp
 | 六服务 UI Runtime + 设置切片七件套 | 完成 |
 | `import-linter` 分层契约 | 完成，配置在生成项目 `pyproject.toml` |
 | `uv run dev` / `doctor` / `scripts/dev.py` | 完成，离屏冒烟通过 |
+| 解释器兜底 + 编辑器配置 | 完成：`main.py` 自动切 `.venv`，生成 `.vscode` 三件套 |
 | `include_docs` / `include_docker` / `include_packaging` | 完成，均默认关闭（打包必须显式开启） |
 | `profile` / `enable_sync` / `include_auth` / `include_updater` | 参数保留位，暂无分支产物 |
 | widgets 库 / F12 面板 / L1-L2 热重载 / seed / db reset | 规划 |
@@ -106,7 +107,7 @@ python scripts/scaffold.py C:\path\myapp
 5. `QMessageBox` 只在 `platform/ui/kit/dialogs.py`；`QThread` / `QRunnable` 只在 `platform/ui/kit/tasks.py`；`app.exec()` 只在 `app/bootstrap.py`。
 6. UI 线程不做 IO；跨线程只经 `platform/ui/kit/tasks.py` 的信号回传。
 7. 同一逻辑出现两次即下沉到 `platform/`，切片内禁止复制平台能力。
-8. 根目录 `main.py` 是薄层启动器：只转发到 `myapp.__main__:main`，禁止写业务逻辑、禁止 import `features/*`、`platform/*`、`app/*`。
+8. 根目录 `main.py` 是薄层启动器：先做解释器兜底（非项目 `.venv` 时自动切换），再转发到 `myapp.__main__:main`；禁止写业务逻辑、禁止 import `features/*`、`platform/*`、`app/*`。
 9. Qt 绑定只在 `platform/ui/qt.py` 导入；其他任何文件出现 `PySide6` / `PySide2` 即为违规。
 10. 禁止 Qt5 独有或已废弃 API：`QRegExp`、`QDesktopWidget`、`QFontMetrics.width`、`exec_()`。
 11. 每种持久化数据都要有对应的表；`QSettings` / JSON 文件 / 注册表只允许存引导信息（数据库位置、`install_id`、安装根目录）。
@@ -157,7 +158,7 @@ python scripts/scaffold.py C:\path\myapp
 | 用户要什么 | 做什么 |
 |---|---|
 | 新建项目 | 按「生成流程」执行；参数与阶段状态见 `template-spec.md` |
-| 找入口 / 改启动链 | 根 `main.py` 仅转发，逻辑落在 `__main__.py`，`app.exec()` 只在 `bootstrap.py` |
+| 找入口 / 改启动链 | 根 `main.py` 只做解释器兜底与转发，逻辑落在 `__main__.py`，`app.exec()` 只在 `bootstrap.py` |
 | 加业务功能 | `uv run python scripts/new_feature.py <name>`，读 `architecture.md` 的切片模板 |
 | 加页面 | 在切片内加 `view.py` + `viewmodel.py`，页面继承 `QWidget`，样式只用令牌；`new page` 生成器尚在规划 |
 | 加表 / 改表 | 手写 Alembic 迁移（`new migration` 生成器尚在规划），先读 `database.md`；必须可回滚 |
@@ -183,6 +184,8 @@ python scripts/scaffold.py C:\path\myapp
 - [ ] PySide6 与 PySide2 两个绑定各出一次可启动产物（仅启用打包时要求）。
 - [ ] 明暗主题切换无残留样式。
 - [ ] 关闭窗口后进程与单实例锁正常释放。
+- [ ] 用系统 Python 执行 `python main.py --self-test` 仍能自动切到 `.venv` 并通过。
+- [ ] 生成项目自带 `.vscode/settings.json` 与 `launch.json`，默认解释器指向 `.venv`。
 - [ ] 下载全程无长时间卡住；切过镜像时，生成记录已写明原源、镜像与耗时。
 
 ## 常见错误
@@ -195,7 +198,8 @@ python scripts/scaffold.py C:\path\myapp
 | SQLite `database is locked` | 并发写 | WAL + `busy_timeout`，写操作走 `serial` 池 |
 | 打包后启动失败（启用打包时） | 资源未收集 | 检查 `pyinstaller.spec` 的 datas 与隐式导入 |
 | `copier update` 冲突 | 改了模板保护区 | 业务代码放特征区，模板区变更走 `_migrations` |
-| `python main.py` 报 `ModuleNotFoundError` | 未 `uv sync` 或 `src/` 兜底失效 | 先在 `main.py` 插入 `src/`，仍失败则检查包名与目录 |
+| `python main.py` 报 `ModuleNotFoundError: structlog/PySide6` | 用了系统 Python，或启动器未做解释器兜底 | 根 `main.py` 必须先比较 `sys.executable` 与项目 `.venv`，不一致就 `os.execv` 切换；同时生成 `.vscode` 配置 |
+| `python main.py` 报 `ModuleNotFoundError`（包本身） | 未 `uv sync` 或 `src/` 兜底失效 | 先 `uv sync`，再确认 `main.py` 插入 `src/` 与包名一致 |
 | 启动器里堆业务逻辑 | 职责越界 | 全部移回 `__main__.py` / `app/` |
 | 降级后 `ImportError` | 直接写了 `import PySide6` | 改从 `platform/ui/qt.py` 导入 |
 | Qt5 下高分屏模糊 | 未设高 DPI 属性 | 调 `qt.enable_high_dpi()`，且在 QApplication 之前 |
@@ -215,4 +219,5 @@ python scripts/scaffold.py C:\path\myapp
 - 新增文件必须同时补测试与注册（容器、路由）。
 - 生成器改动后必须跑一次渲染矩阵，五种组合全部通过。
 - 切过下载源必须记录原源、镜像与耗时；不得静默修改用户全局配置。
+- 生成项目必须包含可移植的 `.vscode/settings.json`、`launch.json`，解释器用 `${workspaceFolder}/.venv/Scripts/python.exe`，不写绝对路径。
 - 任何绕过门禁的改动都要在回复里显式说明原因与补救计划。
