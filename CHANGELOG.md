@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-23
+
 ### Added
 
 - 生成项目新增 `.vscode/settings.json`、`launch.json`、`extensions.json`：默认解释器固定为项目 `.venv`，提供运行与 `--self-test` 两个 debugpy 配置。
