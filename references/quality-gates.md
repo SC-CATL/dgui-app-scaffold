@@ -35,6 +35,7 @@
 15. 复用率度量：审查报告统计平台复用率与自制代码占比。
 16. 数据落库契约：AST 扫描禁止用 `QSettings` / JSON 文件存业务数据。
 17. `alembic check` 接入 CI（当前只有 upgrade/downgrade 集成测试）。
+18. 敏感配置门禁：`.gitignore` 固定含 `*-noupdate` 与 `*-noupdate.*`；pre-commit 本地钩子与 CI 执行 `python scripts/check_noupdate.py`，发现被 git 跟踪的 `-noupdate` 文件即失败。
 
 ## 2. 代码规范与门禁映射
 
@@ -47,6 +48,7 @@
 | 数据与迁移 | Alembic upgrade/downgrade 集成测试 | 已接入；`alembic check` 未接入 |
 | 测试 | pytest、覆盖率门槛 | 已接入 |
 | Git | commitlint | 规划 |
+| 密钥与凭证 | `scripts/check_noupdate.py` + `.gitignore` 规则 | 已接入 |
 
 ## 3. 量化门槛
 

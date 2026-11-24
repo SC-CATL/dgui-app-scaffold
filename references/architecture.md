@@ -91,12 +91,15 @@ myapp/
 ├─ .editorconfig
 ├─ .gitattributes
 ├─ .env.example
+├─ .env-noupdate                 # 可选：本机敏感配置，已被 .gitignore 忽略
+├─ .gitignore                    # 含 *-noupdate 与 *-noupdate.*
 ├─ .github/workflows/ci.yml
 ├─ docs/index.md                # 仅 include_docs=true
 ├─ reports/generation/*.json    # 生成记录（生成期写入）
 ├─ scripts/
 │  ├─ dev.py                    # 轮询 src/ 热重启；--no-watch 关闭
 │  ├─ new_feature.py            # 切片生成器
+│  ├─ check_noupdate.py         # 拦截被 git 跟踪的 -noupdate 敏感配置
 │  ├─ post_gen.py               # _tasks 调用：检测 uv 后 uv sync
 │  └─ build.py                  # 仅 include_packaging=true
 ├─ src/myapp/
@@ -134,7 +137,7 @@ myapp/
    ├─ architecture/test_layers.py
    ├─ integration/test_migrate.py
    ├─ ui/{test_window,test_settings_page}.py
-   └─ unit/*.py
+   └─ unit/*.py                    # 含 test_noupdate_guard.py
 ```
 
 测试统一放在项目根 `tests/`，不在切片内建 `tests/`；切片生成器会追加 `tests/unit/test_<name>_service.py`。
@@ -246,6 +249,17 @@ if __name__ == "__main__":
 - 迁移必须可回滚；每次迁移附数据兼容说明。
 
 完整规范见 `database.md`。
+
+## 7.1 敏感配置与 `-noupdate`
+
+从开源项目里隔离本机凭证，不靠“记得别提交”，靠命名约定与自动拦截：
+
+- **命名**：API Key、Token、私有连接串等本机文件统一命名为 `<用途>-noupdate.<扩展名>`，例如 `apikey-noupdate.toml`、`secrets-noupdate.json`、`.env-noupdate`。`-noupdate` 必须紧邻扩展名或位于结尾。
+- **忽略**：根 `.gitignore` 固定包含 `*-noupdate` 与 `*-noupdate.*`，覆盖任意目录层级。
+- **拦截**：`scripts/check_noupdate.py` 读取 `git ls-files`，发现被跟踪的敏感文件即退出码 1；pre-commit 的 `check-noupdate` 钩子与 CI 的 `lint-type` 段执行同一脚本。
+- **示例文件**：可提交只含占位符的 `.env.example` / `config.example.toml`；真实值只进 `-noupdate` 文件。
+- **误提交**：先 `git rm --cached <file>`，再轮换已暴露的密钥；仅删除历史不等于止损。
+- 明文密钥仍遵守 `database.md`：业务侧只存 `key_id` 与指纹，运行时密钥走 DPAPI 或系统密钥库。
 
 ## 8. 业务切片骨架
 

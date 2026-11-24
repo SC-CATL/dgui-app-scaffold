@@ -83,11 +83,11 @@ python scripts/scaffold.py C:\path\myapp
 
 `python_version` 一旦锁定，`requires-python`、`.python-version`、ruff `target-version`、mypy `python_version`、CI 矩阵全部由它派生；启用打包时 PyInstaller 解释器也用它。禁止各处手写版本号。
 
-## 当前实现状态（2026-11-23）
+## 当前实现状态（2026-11-24）
 
 | 项 | 状态 |
 |---|---|
-| Copier 模板 + 生成器 + 渲染矩阵 | 完成，16 项全绿；`meta-ci.yml` 已加 |
+| Copier 模板 + 生成器 + 渲染矩阵 | 完成，21 项全绿；`meta-ci.yml` 已加 |
 | PySide6 3.12 与 PySide2 3.10 双路径 | 完成，ruff/mypy/pytest/`--self-test` 全绿，覆盖率 94%+ |
 | 模板仓库治理资产 | README / CHANGELOG / LICENSE / .gitignore / meta CI 已完成 |
 | 六服务 UI Runtime + 设置切片七件套 | 完成 |
@@ -96,6 +96,7 @@ python scripts/scaffold.py C:\path\myapp
 | 解释器兜底 + 编辑器配置 | 完成：`main.py` 自动切 `.venv`，生成 `.vscode` 三件套 |
 | `include_docs` / `include_docker` / `include_packaging` | 完成，均默认关闭（打包必须显式开启） |
 | `profile` / `enable_sync` / `include_auth` / `include_updater` | 参数保留位，暂无分支产物 |
+| `-noupdate` 敏感配置保护 | 完成：`.gitignore` + `scripts/check_noupdate.py` + CI + 渲染断言 |
 | widgets 库 / F12 面板 / L1-L2 热重载 / seed / db reset | 规划 |
 
 ## 架构红线（违反即返工）
@@ -112,6 +113,7 @@ python scripts/scaffold.py C:\path\myapp
 10. 禁止 Qt5 独有或已废弃 API：`QRegExp`、`QDesktopWidget`、`QFontMetrics.width`、`exec_()`。
 11. 每种持久化数据都要有对应的表；`QSettings` / JSON 文件 / 注册表只允许存引导信息（数据库位置、`install_id`、安装根目录）。
 12. 文件本体不入库：大文件放磁盘，另建元数据表登记路径、sha256、大小、时间。
+13. 开源敏感配置不入库：API Key、Token、私有连接串等本机文件统一命名为 `<用途>-noupdate.<扩展名>`（或 `.env-noupdate`）；`.gitignore` 必须含 `*-noupdate` 与 `*-noupdate.*`，并由 `scripts/check_noupdate.py` 在 pre-commit 与 CI 拦截已跟踪文件。禁止把明文密钥写进任何受版本控制的文件。
 
 ## 代码硬指标
 
@@ -134,6 +136,7 @@ python scripts/scaffold.py C:\path\myapp
 | 崩溃率 / 数据丢失 | 0.5% / 0 |
 | 重复代码率 | 3% |
 | 平台复用率 / 新功能复用率 | 60% / 80% |
+| 敏感配置被 git 跟踪 | 0 个（`scripts/check_noupdate.py` 必须通过） |
 | 劣化回归 | 超过基线 5% 失败 |
 
 不达标不发布；发布走 Go/No-Go 清单 + 回滚方案 + 值班人。打包相关门槛（安装包冒烟、签名、体积）只在启用打包时适用。
@@ -170,6 +173,7 @@ python scripts/scaffold.py C:\path\myapp
 | 要打包分发 | 先确认用户明确要求；才生成 `pyinstaller.spec`、`scripts/build.py` 与打包 CI |
 | 下载慢 / 依赖装不上 / 模板拉不下来 | 按 `mirrors.md` 判定慢速并立即切镜像；记录切换前后的实测 |
 | 换机器 / 内网部署 | 用 `mirrors.md` 的离线缓存与私有源方案，不依赖个人会话配置 |
+| 加 API Key / 敏感配置 | 本机文件命名成 `*-noupdate.*`（如 `apikey-noupdate.toml`），不写进受控文件；跑 `uv run python scripts/check_noupdate.py` 确认未入库 |
 
 ## 生成后验收
 
@@ -186,6 +190,7 @@ python scripts/scaffold.py C:\path\myapp
 - [ ] 关闭窗口后进程与单实例锁正常释放。
 - [ ] 用系统 Python 执行 `python main.py --self-test` 仍能自动切到 `.venv` 并通过。
 - [ ] 生成项目自带 `.vscode/settings.json` 与 `launch.json`，默认解释器指向 `.venv`。
+- [ ] `.gitignore` 含 `*-noupdate` 与 `*-noupdate.*`，`uv run python scripts/check_noupdate.py` 通过；仓库内无被跟踪的敏感配置。
 - [ ] 下载全程无长时间卡住；切过镜像时，生成记录已写明原源、镜像与耗时。
 
 ## 常见错误
@@ -212,6 +217,7 @@ python scripts/scaffold.py C:\path\myapp
 | 配了镜像仍然慢 | 镜像本身慢，或代理与镜像叠加 | 重新探测，只保留一层加速 |
 | 切换镜像后版本被升级 | 误跑了 `uv lock --upgrade` | 回到 `uv.lock`，用 `--locked` 重装 |
 | TLS 证书错误 | 企业证书未被信任 | `UV_SYSTEM_CERTS=1` 或配置企业根证书，不要关闭校验 |
+| API Key 出现在提交/流水线 | 敏感配置未按 `-noupdate` 命名或未忽略 | 文件改名为 `*-noupdate.*`，`git rm --cached` 后轮换密钥，并跑 `scripts/check_noupdate.py` |
 
 ## 输出要求
 
@@ -220,4 +226,5 @@ python scripts/scaffold.py C:\path\myapp
 - 生成器改动后必须跑一次渲染矩阵，五种组合全部通过。
 - 切过下载源必须记录原源、镜像与耗时；不得静默修改用户全局配置。
 - 生成项目必须包含可移植的 `.vscode/settings.json`、`launch.json`，解释器用 `${workspaceFolder}/.venv/Scripts/python.exe`，不写绝对路径。
+- 涉及 API Key / Token / 私有连接串的配置必须使用 `-noupdate` 命名后缀，并确认 `check_noupdate` 与 CI 通过。
 - 任何绕过门禁的改动都要在回复里显式说明原因与补救计划。

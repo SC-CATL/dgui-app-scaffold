@@ -4,6 +4,11 @@
 
 ## [Unreleased]
 
+### Added
+
+- 新增开源敏感配置命名约定：API Key、Token、私有连接串等本机文件一律以 `-noupdate` 结尾（如 `apikey-noupdate.toml`、`.env-noupdate`），`.gitignore` 内置 `*-noupdate` / `*-noupdate.*`，并由 `scripts/check_noupdate.py` 在 pre-commit 与 CI 拦截已入库文件。
+- 同步更新 `SKILL.md` 架构红线、质量门禁、生成后验收与常见错误，以及 `references/{architecture,database,template-spec,quality-gates}.md`。
+
 ## [0.3.0] - 2026-11-23
 
 ### Added

@@ -6,7 +6,7 @@
 
 | 验证项 | 结果 |
 |---|---|
-| 渲染矩阵 `tests/test_render.py` | 16 项全绿（5 种参数组合） |
+| 渲染矩阵 `tests/test_render.py` | 21 项全绿（5 种参数组合） |
 | 元 CI `.github/workflows/meta-ci.yml` | 渲染矩阵 + 标准组合全量检查（ruff / mypy / pytest / lint-imports / migrate / self-test / doctor） |
 | 真实生成 PySide6 + Python 3.12 | `--self-test` ok；ruff 0；mypy 49 文件 0 错；pytest 66 项全绿，覆盖率 94.59% |
 | 真实生成 PySide2 + Python 3.10 | `--self-test` ok（Qt 5.15.2）；ruff 0；mypy 0 错；pytest 66 项全绿，覆盖率 94.46% |
@@ -36,7 +36,7 @@ py-scaffold/
    ├─ .vscode/                # settings / launch / extensions（解释器固定 .venv）
    ├─ pyproject.toml          # 依赖、依赖组、ruff/mypy/coverage/importlinter
    ├─ alembic/                # env.py + script.py.mako + versions/0001_initial.py
-   ├─ scripts/                # post_gen.py / dev.py / new_feature.py（可选 build.py）
+   ├─ scripts/                # post_gen.py / dev.py / new_feature.py / check_noupdate.py（可选 build.py）
    ├─ src/<pkg>/
    │  ├─ __main__.py          # --version / --self-test / --migrate / --mock / --dev
    │  ├─ app/                 # bootstrap / cli / container / window（唯一组合根）
@@ -126,7 +126,7 @@ _tasks:
 
 ## 5. 渲染矩阵
 
-`tests/test_render.py` 当前覆盖五组参数（共 16 个断言用例）：
+`tests/test_render.py` 当前覆盖五组参数（共 21 个断言用例）：
 
 | 组合 | 关键开关 | 断言 |
 |---|---|---|
@@ -139,6 +139,7 @@ _tasks:
 每个渲染结果还统一断言：
 
 - 文件树完整：`main.py`、`.vscode/settings.json`、`.vscode/launch.json`、`app/bootstrap.py`、`features/settings/api.py`、`alembic/versions/0001_initial.py`、`resources/tokens.toml`。
+- 敏感配置保护：`.gitignore` 含 `*-noupdate` 与 `*-noupdate.*`，`scripts/check_noupdate.py` 与 `tests/unit/test_noupdate_guard.py` 存在，pre-commit 与 CI 均调用该脚本。
 - `main.py` 含解释器兜底：出现 `os.execv`，且环境变量按包名渲染为 `<PKG>_NO_REEXEC`。
 - 无残留 Jinja（扫描时跳过 `.venv` / `.git` / `reports` / 缓存目录）。
 - 全部 `.py` 通过 `py_compile`。
@@ -155,7 +156,7 @@ _tasks:
 完整质量链路需手动执行（或由 CI 承担）：
 
 ```text
-ruff check . -> mypy src -> pytest -q --cov -> uv run lint-imports -> uv run doctor
+ruff check . -> mypy src -> pytest -q --cov -> uv run lint-imports -> uv run python scripts/check_noupdate.py -> uv run doctor
 ```
 
 每个组合还统一断言 `main.py` 存在；根目录启动器的行为靠生成后的真实冒烟与 `tests/architecture/test_layers.py` 约束：
@@ -170,7 +171,7 @@ ruff check . -> mypy src -> pytest -q --cov -> uv run lint-imports -> uv run doc
 ### P0 模板骨架（已完成主体）
 
 - [x] `copier.yml`（参数 + `_subdirectory` + `_exclude` + `_tasks`）
-- [x] 渲染矩阵测试（16 项）
+- [x] 渲染矩阵测试（21 项）
 - [x] meta CI（`meta-ci.yml`：渲染矩阵 + 标准组合全量检查）
 - [x] README / CONTRIBUTING / CHANGELOG
 - [x] Python 版本自动探测与一致性测试
@@ -180,6 +181,7 @@ ruff check . -> mypy src -> pytest -q --cov -> uv run lint-imports -> uv run doc
 - [x] `scripts/scaffold.py` 生成入口与生成记录（`reports/generation/`）
 - [x] 文档站骨架（mkdocs + mike 依赖）
 - [x] `uv run dev` / `doctor` 零配置启动
+- [x] `-noupdate` 敏感配置保护（忽略规则 + `check_noupdate.py` + CI + 渲染断言）
 - [ ] profiles 真正影响产物（当前仅保留字段）
 
 验收：五种参数组合渲染成功；PySide6 / PySide2 两条链路真实生成通过。
